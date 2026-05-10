@@ -29,18 +29,19 @@ export function EventList() {
 
   if (isLoading) {
     return (
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-px bg-border border-y border-border">
+      <ul className="border-b border-border">
         {Array.from({ length: 6 }).map((_, i) => (
-          <div
-            key={i}
-            className="bg-background p-8 lg:p-10 space-y-6 min-h-80"
-          >
-            <Skeleton className="h-3 w-20" />
-            <Skeleton className="h-14 w-full" />
-            <Skeleton className="h-3 w-2/3" />
-          </div>
+          <li key={i} className="border-t border-border py-7 px-1 flex items-center gap-6">
+            <Skeleton className="h-14 w-14 shrink-0" />
+            <div className="flex-1 space-y-3">
+              <Skeleton className="h-2.5 w-24" />
+              <Skeleton className="h-5 w-3/4" />
+              <Skeleton className="h-2.5 w-40" />
+            </div>
+            <Skeleton className="h-8 w-20 shrink-0" />
+          </li>
         ))}
-      </div>
+      </ul>
     );
   }
 
@@ -68,11 +69,11 @@ export function EventList() {
 
   return (
     <>
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-px bg-border border-y border-border">
+      <ul className="border-b border-border">
         {events.map((e) => (
           <EventCard key={e.id} event={e} />
         ))}
-      </div>
+      </ul>
       {hasNextPage && (
         <div className="mt-10 flex justify-center">
           <Button

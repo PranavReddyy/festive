@@ -7,7 +7,7 @@ import { EVENT_CATEGORIES } from "@/lib/constants";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Slider } from "@/components/ui/slider";
+
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
@@ -145,37 +145,16 @@ export function EventFilterSidebar() {
             </div>
           </div>
 
-          {/* Price */}
-          <div>
-            <Label className="mb-3 block">Price (₹)</Label>
-            <Slider
-              value={[f.priceMin ?? 0, f.priceMax ?? 5000]}
-              min={0}
-              max={5000}
-              step={100}
-              onValueChange={(v) => {
-                f.setFilter("priceMin", v[0] === 0 ? undefined : v[0]);
-                f.setFilter(
-                  "priceMax",
-                  v[1] === 5000 ? undefined : v[1],
-                );
-              }}
-            />
-            <div className="mt-2 flex justify-between text-xs text-muted-foreground">
-              <span>₹{f.priceMin ?? 0}</span>
-              <span>₹{f.priceMax ?? 5000}+</span>
-            </div>
-          </div>
 
           {/* City */}
-          <div>
+          {/* <div>
             <Label className="mb-2 block">City</Label>
             <Input
               placeholder="e.g. Hyderabad"
               value={f.city ?? ""}
               onChange={(e) => f.setFilter("city", e.target.value || undefined)}
             />
-          </div>
+          </div> */}
 
           {/* Availability */}
           <div className="flex items-center justify-between rounded-lg border border-border bg-card p-3">

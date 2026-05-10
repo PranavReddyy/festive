@@ -116,6 +116,14 @@
   .text-pretty {
     text-wrap: pretty;
   }
+  /* Reusable eyebrow label: tiny all-caps tracking */
+  .eyebrow {
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
   .grain {
     position: relative;
   }

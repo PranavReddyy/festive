@@ -14,7 +14,7 @@ export default function HomePage() {
       <Marquee />
       <section
         id="events"
-        className="mx-auto max-w-7xl px-6 lg:px-10 pt-20 pb-24"
+        className="mx-auto max-w-5xl px-6 lg:px-10 pt-20 pb-24 overflow-hidden"
       >
         <header className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-12 border-b border-border pb-8">
           <div>
@@ -31,13 +31,15 @@ export default function HomePage() {
           </p>
         </header>
 
-        <div className="grid gap-12 lg:grid-cols-[260px_1fr]">
-          <aside className="lg:sticky lg:top-24 lg:self-start">
+        <div className="grid gap-10 lg:grid-cols-[220px_1fr]">
+          <aside className="lg:sticky lg:top-24 lg:self-start overflow-hidden">
             <EventFilterSidebar />
           </aside>
-          <Suspense fallback={null}>
-            <EventList />
-          </Suspense>
+          <div className="min-w-0">
+            <Suspense fallback={null}>
+              <EventList />
+            </Suspense>
+          </div>
         </div>
       </section>
 
