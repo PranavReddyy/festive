@@ -108,25 +108,23 @@ export function QRScanner({ eventId }: { eventId: string }) {
   return (
     <div className="space-y-4 max-w-xl mx-auto">
       <div
-        className={cn(
-          "relative aspect-square w-full rounded-md border border-border bg-foreground/5 overflow-hidden",
-          !scanning && "grid place-items-center",
-        )}
+        className="relative aspect-square w-full rounded-md border border-border bg-foreground/5 overflow-hidden"
       >
-        {/* html5-qrcode mounts its video here; must always be in the DOM */}
+        {/* html5-qrcode mounts its <video> here. Container must always be visible
+            with real dimensions when reader.start() is called, otherwise the
+            stream attaches but renders at 0×0. */}
         <div
           id={elementId}
-          className={cn(
-            "w-full h-full",
-            !scanning && "hidden",
-          )}
+          className="absolute inset-0 [&>video]:w-full [&>video]:h-full [&>video]:object-cover"
         />
         {!scanning && (
-          <div className="text-center text-muted-foreground p-8 z-10">
-            <Camera className="h-10 w-10 mx-auto mb-3 opacity-50" />
-            <p className="text-sm">
-              Click start to enable the camera and scan QR codes.
-            </p>
+          <div className="absolute inset-0 grid place-items-center text-center text-muted-foreground p-8 bg-foreground/5">
+            <div>
+              <Camera className="h-10 w-10 mx-auto mb-3 opacity-50" />
+              <p className="text-sm">
+                Click start to enable the camera and scan QR codes.
+              </p>
+            </div>
           </div>
         )}
         {scanning && (
