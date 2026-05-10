@@ -94,20 +94,55 @@ export function QRScanner({ eventId }: { eventId: string }) {
       const reader = new Html5Qrcode(elementId, { verbose: false });
       scannerRef.current = reader;
 
-      const target =
-        forceCameraId ?? cameraId ?? { facingMode: "environment" };
+      const config = { fps: 10, qrbox: { width: 240, height: 240 } };
+      const onScan = (decoded: string) => {
+        void onDecoded(decoded);
+      };
+      const onErr = () => {
+        /* per-frame parse failures — ignore */
+      };
 
-      await reader.start(
-        target,
-        { fps: 10, qrbox: { width: 240, height: 240 } },
-        (decoded) => {
-          // Continuous: do not stop. Just queue the decoded token.
-          void onDecoded(decoded);
-        },
-        () => {
-          // per-frame parse failures — ignore
-        },
-      );
+      // Camera selection priority:
+      //  1. Explicit deviceId from picker / argument.
+      //  2. Previously chosen deviceId in state.
+      //  3. Force rear camera via exact constraint (mobile).
+      //  4. Soft preference for rear camera (desktop / single-cam).
+      const explicitId = forceCameraId ?? cameraId;
+
+      if (explicitId) {
+        await reader.start(explicitId, config, onScan, onErr);
+      } else {
+        try {
+          await reader.start(
+            { facingMode: { exact: "environment" } },
+            config,
+            onScan,
+            onErr,
+          );
+        } catch (rearErr) {
+          // No rear camera (laptop, single-cam tablet) — fall back.
+          // Re-create the reader because html5-qrcode leaves state behind on failure.
+          try {
+            await reader.clear();
+          } catch {
+            /* ignore */
+          }
+          const fallback = new Html5Qrcode(elementId, { verbose: false });
+          scannerRef.current = fallback;
+          try {
+            await fallback.start(
+              { facingMode: "environment" },
+              config,
+              onScan,
+              onErr,
+            );
+          } catch {
+            // Surface the original rear-camera error if both fail.
+            throw rearErr;
+          }
+        }
+      }
+
       setScanning(true);
       // Once permission is granted, refresh the camera list (now has labels).
       void loadCameras();
@@ -211,25 +246,32 @@ export function QRScanner({ eventId }: { eventId: string }) {
         const code = (json.code as string) || "";
         const apiError = (json.error as string) || "";
         let status: ScanStatus = "error";
-        let message = apiError || `Request failed (${res.status})`;
-        if (res.status === 422) {
-          status = "invalid";
-          message = "Malformed QR — not a Festive ticket";
-        } else if (code === "ALREADY_USED") {
+        let message = apiError || `Request failed (HTTP ${res.status})`;
+        if (code === "ALREADY_USED") {
           status = "duplicate";
           const t = json.checked_in_at as string | undefined;
           message = t
             ? `Already checked in at ${new Date(t).toLocaleTimeString()}`
             : "Already checked in";
-        } else if (code === "INVALID_QR" || res.status === 404) {
+        } else if (code === "INVALID_QR") {
           status = "invalid";
-          message = apiError || "Unknown QR — not for this event";
+          message = "Unknown QR — not for this event";
         } else if (code === "CANCELLED") {
           status = "cancelled";
           message = apiError || "Ticket is cancelled";
         } else if (res.status === 401 || res.status === 403) {
           status = "error";
           message = apiError || "Not authorised for this event";
+        } else if (res.status === 404) {
+          status = "invalid";
+          message = apiError || "Not found";
+        } else if (res.status === 422) {
+          // Schema rejection — surface the server's reason verbatim plus the
+          // token preview so the operator can see what the camera read.
+          status = "invalid";
+          const preview =
+            token.length > 24 ? `${token.slice(0, 16)}…` : token;
+          message = `${apiError || "Rejected by server"} (token: ${preview})`;
         }
         entry = { id, status, message, at: Date.now() };
       }
