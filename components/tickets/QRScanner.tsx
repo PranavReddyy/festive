@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Html5Qrcode } from "html5-qrcode";
+import type { Html5Qrcode as Html5QrcodeType } from "html5-qrcode";
 import { Camera, CheckCircle2, XCircle, Keyboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,7 +22,7 @@ export function QRScanner({ eventId }: { eventId: string }) {
   const [result, setResult] = useState<ScanResult | null>(null);
   const [manual, setManual] = useState("");
   const [busy, setBusy] = useState(false);
-  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const scannerRef = useRef<Html5QrcodeType | null>(null);
   const elementId = "qr-reader";
 
   useEffect(() => {
@@ -34,6 +34,7 @@ export function QRScanner({ eventId }: { eventId: string }) {
   async function start() {
     setResult(null);
     if (scanning) return;
+    const { Html5Qrcode } = await import("html5-qrcode");
     const reader = new Html5Qrcode(elementId);
     scannerRef.current = reader;
     try {
@@ -108,11 +109,18 @@ export function QRScanner({ eventId }: { eventId: string }) {
     <div className="space-y-4 max-w-xl mx-auto">
       <div
         className={cn(
-          "relative aspect-square w-full overflow-hidden rounded-md border border-border bg-foreground/5",
+          "relative aspect-square w-full rounded-md border border-border bg-foreground/5 overflow-hidden",
           !scanning && "grid place-items-center",
         )}
       >
-        <div id={elementId} className="absolute inset-0" />
+        {/* html5-qrcode mounts its video here; must always be in the DOM */}
+        <div
+          id={elementId}
+          className={cn(
+            "w-full h-full",
+            !scanning && "hidden",
+          )}
+        />
         {!scanning && (
           <div className="text-center text-muted-foreground p-8 z-10">
             <Camera className="h-10 w-10 mx-auto mb-3 opacity-50" />
