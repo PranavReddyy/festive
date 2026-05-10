@@ -89,6 +89,21 @@ export function QRScanner({ eventId }: { eventId: string }) {
     if (scanning || starting) return;
     setStarting(true);
     setPermError(null);
+
+    // Pre-flight: fail fast if the browser doesn't expose getUserMedia.
+    // (iOS in-app webviews — Instagram, Slack, etc. — often don't.)
+    if (
+      typeof navigator === "undefined" ||
+      !navigator.mediaDevices ||
+      typeof navigator.mediaDevices.getUserMedia !== "function"
+    ) {
+      setPermError(
+        "Camera API not available. Open this page in Safari/Chrome directly (not inside an in-app browser), and make sure the URL is https://.",
+      );
+      setStarting(false);
+      return;
+    }
+
     try {
       const { Html5Qrcode } = await import("html5-qrcode");
       const reader = new Html5Qrcode(elementId, { verbose: false });
@@ -102,43 +117,64 @@ export function QRScanner({ eventId }: { eventId: string }) {
         /* per-frame parse failures — ignore */
       };
 
-      // Camera selection priority:
-      //  1. Explicit deviceId from picker / argument.
-      //  2. Previously chosen deviceId in state.
-      //  3. Force rear camera via exact constraint (mobile).
-      //  4. Soft preference for rear camera (desktop / single-cam).
+      // iOS Safari rejects `{ exact: "environment" }` on a lot of devices and
+      // throws OverconstrainedError. The soft `facingMode: "environment"`
+      // preference works on iOS, Android, and desktop alike. Explicit
+      // deviceId from the picker still wins.
       const explicitId = forceCameraId ?? cameraId;
 
-      if (explicitId) {
-        await reader.start(explicitId, config, onScan, onErr);
-      } else {
+      const startWith = async (
+        target: string | MediaTrackConstraints,
+      ): Promise<void> => {
+        await reader.start(target, config, onScan, onErr);
+      };
+
+      try {
+        if (explicitId) {
+          await startWith(explicitId);
+        } else {
+          await startWith({ facingMode: "environment" });
+        }
+      } catch (firstErr) {
+        // Last-resort fallback: any available camera. Helpful on devices
+        // that report cameras but don't honour facingMode hints (some
+        // older iPads, some Linux laptops).
         try {
-          await reader.start(
-            { facingMode: { exact: "environment" } },
+          if (reader.isScanning) await reader.stop();
+          await reader.clear();
+        } catch {
+          /* ignore */
+        }
+        const fallback = new Html5Qrcode(elementId, { verbose: false });
+        scannerRef.current = fallback;
+        try {
+          await fallback.start(
+            { facingMode: "user" },
             config,
             onScan,
             onErr,
           );
-        } catch (rearErr) {
-          // No rear camera (laptop, single-cam tablet) — fall back.
-          // Re-create the reader because html5-qrcode leaves state behind on failure.
+        } catch {
+          throw firstErr;
+        }
+      }
+
+      // iOS Safari requires the <video> to be `playsinline` and `muted`
+      // or it will refuse to play inline (renders black or goes fullscreen).
+      // html5-qrcode usually sets these, but we enforce it ourselves.
+      const container = document.getElementById(elementId);
+      const video = container?.querySelector("video");
+      if (video) {
+        video.setAttribute("playsinline", "true");
+        video.setAttribute("webkit-playsinline", "true");
+        video.muted = true;
+        // If the play() promise was rejected (autoplay policy on iOS),
+        // try once more after the user gesture that triggered start().
+        if (video.paused) {
           try {
-            await reader.clear();
+            await video.play();
           } catch {
-            /* ignore */
-          }
-          const fallback = new Html5Qrcode(elementId, { verbose: false });
-          scannerRef.current = fallback;
-          try {
-            await fallback.start(
-              { facingMode: "environment" },
-              config,
-              onScan,
-              onErr,
-            );
-          } catch {
-            // Surface the original rear-camera error if both fail.
-            throw rearErr;
+            /* autoplay blocked — operator can tap the preview */
           }
         }
       }
@@ -147,12 +183,7 @@ export function QRScanner({ eventId }: { eventId: string }) {
       // Once permission is granted, refresh the camera list (now has labels).
       void loadCameras();
     } catch (e) {
-      const msg =
-        e instanceof Error
-          ? e.message
-          : typeof e === "string"
-            ? e
-            : "Could not start camera";
+      const msg = explainCameraError(e);
       setPermError(msg);
       scannerRef.current = null;
     } finally {
@@ -578,6 +609,33 @@ function statusBg(status: ScanStatus) {
     case "error":
     default:
       return "bg-[oklch(0.97_0.03_25)]/95 border-destructive/40";
+  }
+}
+
+function explainCameraError(e: unknown): string {
+  if (typeof e === "string") return e;
+  if (!(e instanceof Error)) return "Could not start camera";
+  // DOMException names from getUserMedia.
+  const name = (e as DOMException).name || "";
+  switch (name) {
+    case "NotAllowedError":
+    case "PermissionDeniedError":
+      return "Camera permission denied. In iOS: Settings → Safari → Camera → Allow. Then reload this page.";
+    case "NotFoundError":
+    case "DevicesNotFoundError":
+      return "No camera found on this device.";
+    case "NotReadableError":
+    case "TrackStartError":
+      return "Camera is in use by another app. Close other apps using the camera and try again.";
+    case "OverconstrainedError":
+    case "ConstraintNotSatisfiedError":
+      return "This camera doesn't match the requested constraints. Try the camera picker.";
+    case "SecurityError":
+      return "Camera blocked by the browser. The page must be served over https://.";
+    case "AbortError":
+      return "Camera start was aborted. Try again.";
+    default:
+      return e.message || "Could not start camera";
   }
 }
 

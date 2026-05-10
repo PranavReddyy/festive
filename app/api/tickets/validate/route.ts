@@ -10,10 +10,30 @@ export async function POST(req: NextRequest) {
   if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await req.json();
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json(
+      { error: "Body must be JSON", code: "BAD_BODY" },
+      { status: 422 },
+    );
+  }
+
   const parsed = validateTicketSchema.safeParse(body);
-  if (!parsed.success)
-    return NextResponse.json({ error: "Invalid request" }, { status: 422 });
+  if (!parsed.success) {
+    const details = parsed.error.issues.map((i) => ({
+      path: i.path.join("."),
+      message: i.message,
+    }));
+    const summary =
+      details.map((d) => `${d.path || "body"}: ${d.message}`).join("; ") ||
+      "Invalid request";
+    return NextResponse.json(
+      { error: summary, code: "SCHEMA", details },
+      { status: 422 },
+    );
+  }
 
   const { qr_token, event_id } = parsed.data;
 
