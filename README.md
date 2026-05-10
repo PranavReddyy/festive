@@ -4,7 +4,15 @@
 
 Festive is an end-to-end events marketplace for small and mid-sized organisers in India — built for festivals, concerts, conferences, workshops, listening rooms, exhibitions, talks, and meetups. It pairs an editorial, awwwards-leaning attendee experience with a serious organiser back office: tiered ticketing, QR-coded admissions, an in-app door scanner, and a deep analytics dashboard.
 
-This repository is the production-grade web application — Next.js 16, React 19, Tailwind v4, and Supabase Postgres with row-level security.
+This repository is a web application — Next.js 16, React 19, Tailwind v4, and Supabase Postgres with row-level security.
+
+| Roll Number | Name               | GitHub |
+| ----------- | ------------------ | ------ |
+| SE23UCSE111 | Mitta Pranav Reddy | [@PranavReddyy](https://github.com/PranavReddyy) |
+| SE23UCSE119 | Sudhiksha Narayan  | [@Sudhiksha-Narayanrao](https://github.com/Sudhiksha-Narayanrao) |
+| SE23UCSE160 | Ankit Reddy        | [@ankitsblade](https://github.com/ankitsblade) |
+| SE23UCSE108 | Manjari Pandey     | [@manjaripandey](https://github.com/manjaripandey) |
+| SE23UCSE100 | Kushpreet Singh    | [@kushhhh13](https://github.com/kushhhh13) |
 
 ---
 
@@ -356,19 +364,3 @@ This project relies on Next 16-specific APIs:
 - `params` / `searchParams` are `Promise<…>` in pages and route handlers
 - Turbopack-only dev/build pipeline
 - React 19 with the React Compiler. A few `react-hook-form` `watch()` call sites surface compiler warnings — these are documented and expected.
-
-Refer to `AGENTS.md` for any additional contribution rules.
-
----
-
-## Team
-
-Festive is built by a team of five. Each person owns a slice of the platform end to end.
-
-| Member        | Role                          | What they shipped                                                                                                                                                 |
-| ------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Pranav**    | Lead engineer & design system | App Router architecture, design tokens, typography pass, Wordmark, hero / how-it-works / event-detail editorial pages, the retro-stub TicketCard.                 |
-| **Ankit**     | Backend & data                | Supabase schema, RLS policies, `handle_new_user` trigger, `events_with_availability` view, seed data, all `/api/*` route handlers, ticket validation logic.       |
-| **Manjari**   | Organiser tools & analytics   | Cross-event analytics dashboard, the per-event control room (live KPIs, participant search, restrict/restore, tier breakdown), EventsTable, EventForm composer.   |
-| **Sudeekha**  | Tickets & door experience     | QRDisplay generation, html5-qrcode scanner integration, manual entry path, scanner picker page, my-tickets wallet wiring.                                         |
-| **Kushpreet** | Discovery & filtering         | EventList with infinite query, EventFilterSidebar (category, date range, price slider, city, availability), saved-events store, EmptyState states across the app. |
