@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { Html5Qrcode as Html5QrcodeType } from "html5-qrcode";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import jsQR from "jsqr";
 import {
   Camera,
+  CameraOff,
   CheckCircle2,
   XCircle,
   Keyboard,
@@ -28,190 +29,166 @@ interface ScanEntry {
   at: number;
 }
 
-interface CameraInfo {
-  id: string;
-  label: string;
-}
-
 const DUPLICATE_SUPPRESS_MS = 4000;
 const FLASH_MS = 1800;
 
 export function QRScanner({ eventId }: { eventId: string }) {
   const [scanning, setScanning] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
   const [starting, setStarting] = useState(false);
-  const [cameras, setCameras] = useState<CameraInfo[]>([]);
-  const [cameraId, setCameraId] = useState<string | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
   const [history, setHistory] = useState<ScanEntry[]>([]);
   const [flash, setFlash] = useState<ScanEntry | null>(null);
   const [manual, setManual] = useState("");
   const [busy, setBusy] = useState(false);
-  const [permError, setPermError] = useState<string | null>(null);
 
-  const scannerRef = useRef<Html5QrcodeType | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const rafRef = useRef<number | null>(null);
   const lastTokensRef = useRef<Map<string, number>>(new Map());
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const elementId = "qr-reader";
+  const validatingRef = useRef(false);
 
   const stats = useMemo(() => {
     const ok = history.filter((h) => h.status === "ok").length;
     const dup = history.filter((h) => h.status === "duplicate").length;
     const bad = history.filter(
-      (h) => h.status === "invalid" || h.status === "cancelled" || h.status === "error",
+      (h) =>
+        h.status === "invalid" ||
+        h.status === "cancelled" ||
+        h.status === "error",
     ).length;
     return { ok, dup, bad, total: history.length };
   }, [history]);
 
+  const stopCamera = useCallback(() => {
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    canvasRef.current = null;
+    ctxRef.current = null;
+    setCameraReady(false);
+    setScanning(false);
+  }, []);
+
   useEffect(() => {
     return () => {
       if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
-      void hardStop();
+      stopCamera();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [stopCamera]);
 
-  async function loadCameras() {
-    try {
-      const { Html5Qrcode } = await import("html5-qrcode");
-      const list = await Html5Qrcode.getCameras();
-      const mapped = list.map((c) => ({ id: c.id, label: c.label || "Camera" }));
-      setCameras(mapped);
-      if (!cameraId && mapped.length > 0) {
-        // Prefer back camera if labeled.
-        const back = mapped.find((c) => /back|rear|environment/i.test(c.label));
-        setCameraId(back?.id ?? mapped[0].id);
-      }
-    } catch {
-      /* permissions not granted yet — list will populate after start */
-    }
-  }
-
-  async function start(forceCameraId?: string) {
+  const startCamera = useCallback(async () => {
     if (scanning || starting) return;
     setStarting(true);
-    setPermError(null);
+    setCameraError(null);
 
-    // Pre-flight: fail fast if the browser doesn't expose getUserMedia.
-    // (iOS in-app webviews — Instagram, Slack, etc. — often don't.)
     if (
       typeof navigator === "undefined" ||
       !navigator.mediaDevices ||
       typeof navigator.mediaDevices.getUserMedia !== "function"
     ) {
-      setPermError(
-        "Camera API not available. Open this page in Safari/Chrome directly (not inside an in-app browser), and make sure the URL is https://.",
+      setCameraError(
+        "Camera API not available. Open this page in Safari/Chrome directly (not in an in-app browser), and make sure the URL is https://.",
       );
       setStarting(false);
       return;
     }
 
     try {
-      const { Html5Qrcode } = await import("html5-qrcode");
-      const reader = new Html5Qrcode(elementId, { verbose: false });
-      scannerRef.current = reader;
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: "environment",
+          width: { ideal: 1280 },
+          height: { ideal: 1280 },
+        },
+        audio: false,
+      });
 
-      const config = { fps: 10, qrbox: { width: 240, height: 240 } };
-      const onScan = (decoded: string) => {
-        void onDecoded(decoded);
-      };
-      const onErr = () => {
-        /* per-frame parse failures — ignore */
-      };
+      const video = videoRef.current;
+      if (!video) {
+        stream.getTracks().forEach((t) => t.stop());
+        setStarting(false);
+        return;
+      }
+      video.srcObject = stream;
+      streamRef.current = stream;
 
-      // iOS Safari rejects `{ exact: "environment" }` on a lot of devices and
-      // throws OverconstrainedError. The soft `facingMode: "environment"`
-      // preference works on iOS, Android, and desktop alike. Explicit
-      // deviceId from the picker still wins.
-      const explicitId = forceCameraId ?? cameraId;
-
-      const startWith = async (
-        target: string | MediaTrackConstraints,
-      ): Promise<void> => {
-        await reader.start(target, config, onScan, onErr);
-      };
-
+      // iOS Safari: required for inline playback.
+      video.setAttribute("playsinline", "true");
+      video.setAttribute("webkit-playsinline", "true");
+      video.muted = true;
       try {
-        if (explicitId) {
-          await startWith(explicitId);
-        } else {
-          await startWith({ facingMode: "environment" });
-        }
-      } catch (firstErr) {
-        // Last-resort fallback: any available camera. Helpful on devices
-        // that report cameras but don't honour facingMode hints (some
-        // older iPads, some Linux laptops).
-        try {
-          if (reader.isScanning) await reader.stop();
-          await reader.clear();
-        } catch {
-          /* ignore */
-        }
-        const fallback = new Html5Qrcode(elementId, { verbose: false });
-        scannerRef.current = fallback;
-        try {
-          await fallback.start(
-            { facingMode: "user" },
-            config,
-            onScan,
-            onErr,
-          );
-        } catch {
-          throw firstErr;
-        }
+        await video.play();
+      } catch {
+        /* autoplay may be blocked; user can tap */
       }
 
-      // iOS Safari requires the <video> to be `playsinline` and `muted`
-      // or it will refuse to play inline (renders black or goes fullscreen).
-      // html5-qrcode usually sets these, but we enforce it ourselves.
-      const container = document.getElementById(elementId);
-      const video = container?.querySelector("video");
-      if (video) {
-        video.setAttribute("playsinline", "true");
-        video.setAttribute("webkit-playsinline", "true");
-        video.muted = true;
-        // If the play() promise was rejected (autoplay policy on iOS),
-        // try once more after the user gesture that triggered start().
-        if (video.paused) {
-          try {
-            await video.play();
-          } catch {
-            /* autoplay blocked — operator can tap the preview */
-          }
-        }
-      }
-
+      const canvas = document.createElement("canvas");
+      canvasRef.current = canvas;
+      ctxRef.current = canvas.getContext("2d", { willReadFrequently: true });
+      setCameraReady(true);
       setScanning(true);
-      // Once permission is granted, refresh the camera list (now has labels).
-      void loadCameras();
     } catch (e) {
-      const msg = explainCameraError(e);
-      setPermError(msg);
-      scannerRef.current = null;
+      setCameraError(explainCameraError(e));
+      stopCamera();
     } finally {
       setStarting(false);
     }
-  }
+  }, [scanning, starting, stopCamera]);
 
-  async function hardStop() {
-    const r = scannerRef.current;
-    scannerRef.current = null;
-    if (r) {
-      try {
-        if (r.isScanning) await r.stop();
-        await r.clear();
-      } catch {
-        /* ignore */
+  // Scan loop.
+  useEffect(() => {
+    if (!scanning || !cameraReady) return;
+    let mounted = true;
+
+    const scan = () => {
+      if (!mounted) return;
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      const ctx = ctxRef.current;
+
+      if (
+        video &&
+        canvas &&
+        ctx &&
+        video.readyState === video.HAVE_ENOUGH_DATA &&
+        video.videoWidth > 0
+      ) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height, {
+          inversionAttempts: "dontInvert",
+        });
+        if (code?.data) {
+          void onDecoded(code.data);
+        }
       }
-    }
-    setScanning(false);
-  }
+      rafRef.current = requestAnimationFrame(scan);
+    };
+    rafRef.current = requestAnimationFrame(scan);
 
-  async function switchCamera(id: string) {
-    setCameraId(id);
-    if (scanning) {
-      await hardStop();
-      await start(id);
-    }
-  }
+    return () => {
+      mounted = false;
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scanning, cameraReady]);
 
   function pushFlash(entry: ScanEntry) {
     setFlash(entry);
@@ -226,14 +203,13 @@ export function QRScanner({ eventId }: { eventId: string }) {
   async function onDecoded(raw: string) {
     const token = raw.trim();
     if (!token) return;
+    if (validatingRef.current) return;
 
-    // Suppress duplicate scans of the same token within window.
     const now = Date.now();
     const last = lastTokensRef.current.get(token);
     if (last && now - last < DUPLICATE_SUPPRESS_MS) return;
     lastTokensRef.current.set(token, now);
 
-    // Trim the map occasionally so it doesn't grow forever.
     if (lastTokensRef.current.size > 200) {
       const cutoff = now - DUPLICATE_SUPPRESS_MS;
       for (const [k, v] of lastTokensRef.current) {
@@ -245,6 +221,7 @@ export function QRScanner({ eventId }: { eventId: string }) {
   }
 
   async function validate(token: string) {
+    validatingRef.current = true;
     setBusy(true);
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     try {
@@ -257,7 +234,7 @@ export function QRScanner({ eventId }: { eventId: string }) {
       try {
         json = await res.json();
       } catch {
-        /* non-JSON body */
+        /* non-JSON */
       }
 
       let entry: ScanEntry;
@@ -297,8 +274,6 @@ export function QRScanner({ eventId }: { eventId: string }) {
           status = "invalid";
           message = apiError || "Not found";
         } else if (res.status === 422) {
-          // Schema rejection — surface the server's reason verbatim plus the
-          // token preview so the operator can see what the camera read.
           status = "invalid";
           const preview =
             token.length > 24 ? `${token.slice(0, 16)}…` : token;
@@ -320,6 +295,7 @@ export function QRScanner({ eventId }: { eventId: string }) {
       pushHistory(entry);
     } finally {
       setBusy(false);
+      validatingRef.current = false;
     }
   }
 
@@ -327,31 +303,41 @@ export function QRScanner({ eventId }: { eventId: string }) {
     <div className="space-y-5 max-w-xl mx-auto">
       {/* Camera viewport */}
       <div className="relative aspect-square w-full rounded-md border border-border bg-foreground/5 overflow-hidden">
-        <div
-          id={elementId}
-          className="absolute inset-0 [&>video]:w-full [&>video]:h-full [&>video]:object-cover"
+        {/* Video is always mounted so the ref is ready. iOS requires
+            playsInline + muted + autoPlay for inline preview. */}
+        <video
+          ref={videoRef}
+          autoPlay
+          muted
+          playsInline
+          className={cn(
+            "absolute inset-0 h-full w-full object-cover",
+            !cameraReady && "opacity-0",
+          )}
         />
 
-        {/* Idle / permission overlay */}
-        {!scanning && !starting && (
+        {!scanning && !starting && !cameraError && (
           <div className="absolute inset-0 grid place-items-center text-center text-muted-foreground p-8 bg-foreground/5">
             <div className="space-y-3">
               <Camera className="h-10 w-10 mx-auto opacity-50" />
-              {permError ? (
-                <>
-                  <p className="text-sm text-destructive font-medium">
-                    Camera blocked
-                  </p>
-                  <p className="text-xs max-w-xs mx-auto">{permError}</p>
-                  <p className="text-[11px] text-muted-foreground/80">
-                    Allow camera access in your browser, then click Start again.
-                  </p>
-                </>
-              ) : (
-                <p className="text-sm">
-                  Click start to enable the camera and scan QR codes.
-                </p>
-              )}
+              <p className="text-sm">
+                Tap start to enable the camera and scan QR codes.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {cameraError && !scanning && (
+          <div className="absolute inset-0 grid place-items-center text-center p-6 bg-foreground/5">
+            <div className="space-y-3 max-w-xs mx-auto">
+              <CameraOff className="h-10 w-10 mx-auto text-destructive" />
+              <p className="text-sm font-medium text-destructive">
+                Camera unavailable
+              </p>
+              <p className="text-xs text-muted-foreground">{cameraError}</p>
+              <p className="text-[11px] text-muted-foreground/80">
+                You can still use the manual entry below.
+              </p>
             </div>
           </div>
         )}
@@ -364,8 +350,7 @@ export function QRScanner({ eventId }: { eventId: string }) {
           </div>
         )}
 
-        {/* Reticle */}
-        {scanning && (
+        {scanning && cameraReady && (
           <>
             <div className="pointer-events-none absolute inset-0 grid place-items-center">
               <div className="relative h-60 w-60">
@@ -390,11 +375,10 @@ export function QRScanner({ eventId }: { eventId: string }) {
           </>
         )}
 
-        {/* Flash banner — recent scan result */}
         {flash && (
           <div
             className={cn(
-              "absolute bottom-3 left-3 right-3 flex items-start gap-3 rounded-md border p-3 backdrop-blur shadow-sm transition-opacity",
+              "absolute bottom-3 left-3 right-3 flex items-start gap-3 rounded-md border p-3 backdrop-blur shadow-sm",
               statusBg(flash.status),
             )}
           >
@@ -418,12 +402,16 @@ export function QRScanner({ eventId }: { eventId: string }) {
       {/* Controls */}
       <div className="flex flex-wrap items-center gap-2">
         {scanning ? (
-          <Button onClick={hardStop} variant="outline" className="flex-1 min-w-35">
+          <Button
+            onClick={stopCamera}
+            variant="outline"
+            className="flex-1 min-w-35"
+          >
             Stop scanning
           </Button>
         ) : (
           <Button
-            onClick={() => start()}
+            onClick={startCamera}
             disabled={starting}
             className="flex-1 min-w-35"
           >
@@ -437,21 +425,6 @@ export function QRScanner({ eventId }: { eventId: string }) {
               </>
             )}
           </Button>
-        )}
-
-        {cameras.length > 1 && (
-          <select
-            value={cameraId ?? ""}
-            onChange={(e) => switchCamera(e.target.value)}
-            className="h-9 rounded-md border border-border bg-background px-2 text-[12px]"
-            aria-label="Camera"
-          >
-            {cameras.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.label}
-              </option>
-            ))}
-          </select>
         )}
 
         {history.length > 0 && (
@@ -493,7 +466,7 @@ export function QRScanner({ eventId }: { eventId: string }) {
                   setManual("");
                 }
               }}
-              placeholder="Paste ticket QR token (UUID)"
+              placeholder="Paste ticket QR token"
               className="font-mono text-[12px]"
             />
             <Button
@@ -507,7 +480,8 @@ export function QRScanner({ eventId }: { eventId: string }) {
             </Button>
           </div>
           <p className="text-[11px] text-muted-foreground">
-            Paste the raw token if a QR can&apos;t be scanned. Press Enter to validate.
+            Paste the raw token if a QR can&apos;t be scanned. Press Enter to
+            validate.
           </p>
         </div>
       </div>
@@ -529,7 +503,9 @@ export function QRScanner({ eventId }: { eventId: string }) {
                 key={h.id}
                 className="flex items-start gap-3 px-4 py-2.5 text-[13px]"
               >
-                <span className="mt-0.5 shrink-0">{statusIcon(h.status, "sm")}</span>
+                <span className="mt-0.5 shrink-0">
+                  {statusIcon(h.status, "sm")}
+                </span>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium leading-tight truncate">
                     {h.message}
@@ -573,7 +549,12 @@ function Stat({
           : "text-foreground";
   return (
     <div className="bg-card px-3 py-2.5">
-      <div className={cn("font-display text-2xl leading-none tabular-nums", color)}>
+      <div
+        className={cn(
+          "font-display text-2xl leading-none tabular-nums",
+          color,
+        )}
+      >
         {value}
       </div>
       <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground mt-1">
@@ -587,9 +568,17 @@ function statusIcon(status: ScanStatus, size: "sm" | "md" = "md") {
   const cls = size === "sm" ? "h-4 w-4" : "h-5 w-5";
   switch (status) {
     case "ok":
-      return <CheckCircle2 className={cn(cls, "text-[oklch(0.5_0.12_150)] shrink-0")} />;
+      return (
+        <CheckCircle2
+          className={cn(cls, "text-[oklch(0.5_0.12_150)] shrink-0")}
+        />
+      );
     case "duplicate":
-      return <AlertTriangle className={cn(cls, "text-[oklch(0.55_0.14_70)] shrink-0")} />;
+      return (
+        <AlertTriangle
+          className={cn(cls, "text-[oklch(0.55_0.14_70)] shrink-0")}
+        />
+      );
     case "invalid":
     case "cancelled":
     case "error":
@@ -615,7 +604,6 @@ function statusBg(status: ScanStatus) {
 function explainCameraError(e: unknown): string {
   if (typeof e === "string") return e;
   if (!(e instanceof Error)) return "Could not start camera";
-  // DOMException names from getUserMedia.
   const name = (e as DOMException).name || "";
   switch (name) {
     case "NotAllowedError":
@@ -629,7 +617,7 @@ function explainCameraError(e: unknown): string {
       return "Camera is in use by another app. Close other apps using the camera and try again.";
     case "OverconstrainedError":
     case "ConstraintNotSatisfiedError":
-      return "This camera doesn't match the requested constraints. Try the camera picker.";
+      return "This camera doesn't match the requested constraints.";
     case "SecurityError":
       return "Camera blocked by the browser. The page must be served over https://.";
     case "AbortError":
@@ -638,4 +626,3 @@ function explainCameraError(e: unknown): string {
       return e.message || "Could not start camera";
   }
 }
-
