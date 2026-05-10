@@ -372,21 +372,3 @@ Festive is built by a team of five. Each person owns a slice of the platform end
 | **Manjari**   | Organiser tools & analytics   | Cross-event analytics dashboard, the per-event control room (live KPIs, participant search, restrict/restore, tier breakdown), EventsTable, EventForm composer.   |
 | **Sudeekha**  | Tickets & door experience     | QRDisplay generation, html5-qrcode scanner integration, manual entry path, scanner picker page, my-tickets wallet wiring.                                         |
 | **Kushpreet** | Discovery & filtering         | EventList with infinite query, EventFilterSidebar (category, date range, price slider, city, availability), saved-events store, EmptyState states across the app. |
-
-Pull requests are reviewed by at least one member outside the area being changed.
-
----
-
-## Roadmap
-
-- [ ] Stripe Connect integration so payouts hit organisers automatically
-- [ ] iCal / Google Calendar export from the ticket wallet
-- [ ] Waitlists for sold-out tiers, with a release-on-cancel flow
-- [ ] Per-event discount codes with tier-level eligibility
-- [ ] Native mobile scanner app wrapping the existing `/api/tickets/validate` endpoint
-- [ ] Public organiser pages with their full upcoming + past programme
-- [ ] Email receipts via Resend, replacing the current minimal toast confirmation
-
----
-
-Made with care, in India.

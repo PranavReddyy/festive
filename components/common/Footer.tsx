@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Wordmark } from "./Wordmark";
+import { AsciiSignature } from "./Ascii";
 
 export function Footer() {
   const year = new Date().getFullYear();
@@ -49,8 +50,9 @@ export function Footer() {
       </div>
 
       <div className="border-t border-border">
-        <div className="mx-auto max-w-7xl px-6 lg:px-10 py-6 flex flex-col sm:flex-row gap-2 justify-between text-xs text-muted-foreground">
+        <div className="mx-auto max-w-7xl px-6 lg:px-10 py-6 flex flex-col sm:flex-row gap-3 justify-between items-center text-xs text-muted-foreground">
           <span>© {year} Festive. All rights reserved.</span>
+          <AsciiSignature />
           <span className="font-mono tracking-tight">Made with care, in India.</span>
         </div>
       </div>

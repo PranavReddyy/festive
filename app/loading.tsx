@@ -1,9 +1,5 @@
-import { LoadingSpinner } from "@/components/common/LoadingSpinner";
+import { AsciiLoadingScreen } from "@/components/common/Ascii";
 
 export default function Loading() {
-  return (
-    <div className="min-h-[40vh] grid place-items-center">
-      <LoadingSpinner />
-    </div>
-  );
+  return <AsciiLoadingScreen />;
 }

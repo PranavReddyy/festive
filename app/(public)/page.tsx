@@ -4,6 +4,11 @@ import { EventList } from "@/components/events/EventList";
 import { EventFilterSidebar } from "@/components/events/EventFilterSidebar";
 import { Button } from "@/components/ui/button";
 import { ArrowUpRight } from "lucide-react";
+import {
+  AsciiTicket,
+  AsciiConstellation,
+  AsciiQRBlock,
+} from "@/components/common/Ascii";
 
 export const dynamic = "force-dynamic";
 
@@ -50,38 +55,53 @@ export default function HomePage() {
 
 function Hero() {
   return (
-    <section className="border-b border-border">
-      <div className="mx-auto max-w-7xl px-6 lg:px-10 pt-20 pb-24 lg:pt-32 lg:pb-32">
+    <section className="border-b border-border overflow-hidden">
+      <div className="mx-auto max-w-7xl px-6 lg:px-10 pt-20 pb-24 lg:pt-28 lg:pb-32">
         <p className="text-[10px] font-medium uppercase tracking-[0.22em] text-muted-foreground mb-8">
           Issue 01 — Spring &rsquo;26
         </p>
 
-        <h1 className="font-display text-[clamp(3rem,9vw,8.5rem)] leading-[0.95] tracking-tighter text-balance max-w-[14ch]">
-          Find the rooms{" "}
-          <em className="italic font-display">worth</em> showing up for.
-        </h1>
+        {/* ── Two-column hero: copy on the left, draggable ticket on the right ── */}
+        <div className="grid gap-12 lg:gap-16 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:items-center">
+          {/* LEFT — copy */}
+          <div>
+            <h1 className="font-display text-[clamp(3rem,8.5vw,7.5rem)] leading-[0.95] tracking-tighter text-balance max-w-[14ch]">
+              Find the rooms{" "}
+              <em className="italic font-display">worth</em> showing up for.
+            </h1>
 
-        <div className="mt-12 grid gap-10 md:grid-cols-2 md:items-end">
-          <p className="text-base lg:text-lg text-muted-foreground max-w-md leading-relaxed text-pretty">
-            Festive is a quieter marketplace for live events — curated by people
-            who care, ad-free, and built for the evenings worth remembering.
-          </p>
+            <p className="mt-10 text-base lg:text-lg text-muted-foreground max-w-md leading-relaxed text-pretty">
+              Festive is a quieter marketplace for live events — curated by
+              people who care, ad-free, and built for the evenings worth
+              remembering.
+            </p>
 
-          <div className="flex flex-wrap gap-3 md:justify-end">
-            <Button size="lg" asChild>
-              <Link href="#events">
-                Browse events
-                <ArrowUpRight className="h-4 w-4" />
-              </Link>
-            </Button>
-            <Button size="lg" variant="outline" asChild>
-              <Link href="/register?role=organiser">Host an event</Link>
-            </Button>
+            <div className="mt-10 flex flex-wrap gap-3">
+              <Button size="lg" asChild>
+                <Link href="#events">
+                  Browse events
+                  <ArrowUpRight className="h-4 w-4" />
+                </Link>
+              </Button>
+              <Button size="lg" variant="outline" asChild>
+                <Link href="/register?role=organiser">Host an event</Link>
+              </Button>
+            </div>
+          </div>
+
+          {/* RIGHT — draggable ASCII ticket */}
+          <div className="relative flex justify-center lg:justify-end">
+            <div className="w-full max-w-160">
+              <AsciiTicket />
+              <p className="mt-6 text-[10px] font-medium uppercase tracking-[0.22em] text-muted-foreground text-right pr-2">
+                admit one · non-transferable
+              </p>
+            </div>
           </div>
         </div>
 
         {/* hairline metrics */}
-        <dl className="mt-20 grid grid-cols-2 md:grid-cols-4 border-t border-border">
+        <dl className="mt-24 grid grid-cols-2 md:grid-cols-4 border-t border-border">
           {[
             { k: "Curated cities", v: "12" },
             { k: "Hosts on the platform", v: "240+" },
@@ -134,27 +154,46 @@ function Marquee() {
 
 function CallToAction() {
   return (
-    <section className="border-t border-border bg-foreground text-background">
-      <div className="mx-auto max-w-7xl px-6 lg:px-10 py-24 lg:py-32 grid gap-10 md:grid-cols-2 md:items-end">
-        <h2 className="font-display text-5xl lg:text-6xl leading-[1.02] tracking-tight max-w-[14ch] text-background">
-          Hosting something{" "}
-          <em className="italic font-display">remarkable</em>?
-        </h2>
-        <div className="space-y-6 max-w-md md:justify-self-end">
-          <p className="text-[15px] leading-relaxed text-background/70 text-pretty">
-            Festive is invite-and-application based. We work with organisers
-            who treat their attendees the way we do — with intention.
+    <section className="relative border-t border-border bg-foreground text-background overflow-hidden">
+      {/* Interactive starfield — tracks the cursor */}
+      <div className="absolute inset-0 pointer-events-none opacity-50 mix-blend-screen">
+        <AsciiConstellation
+          cols={72}
+          rows={14}
+          className="text-background/40 px-6 lg:px-10 py-10"
+        />
+      </div>
+
+      <div className="relative mx-auto max-w-7xl px-6 lg:px-10 py-24 lg:py-32 grid gap-10 md:grid-cols-[1fr_auto] md:items-end">
+        <div>
+          <h2 className="font-display text-5xl lg:text-6xl leading-[1.02] tracking-tight max-w-[14ch] text-background">
+            Hosting something{" "}
+            <em className="italic font-display">remarkable</em>?
+          </h2>
+          <div className="mt-10 space-y-6 max-w-md">
+            <p className="text-[15px] leading-relaxed text-background/70 text-pretty">
+              Festive is invite-and-application based. We work with organisers
+              who treat their attendees the way we do — with intention.
+            </p>
+            <Button
+              size="lg"
+              asChild
+              className="bg-background text-foreground hover:bg-background/90"
+            >
+              <Link href="/register?role=organiser">
+                Apply to host
+                <ArrowUpRight className="h-4 w-4" />
+              </Link>
+            </Button>
+          </div>
+        </div>
+
+        {/* Decorative pseudo-QR block */}
+        <div className="hidden lg:block">
+          <AsciiQRBlock className="text-background/85" />
+          <p className="mt-4 text-[10px] font-medium uppercase tracking-[0.22em] text-background/45">
+            scan · admit one
           </p>
-          <Button
-            size="lg"
-            asChild
-            className="bg-background text-foreground hover:bg-background/90"
-          >
-            <Link href="/register?role=organiser">
-              Apply to host
-              <ArrowUpRight className="h-4 w-4" />
-            </Link>
-          </Button>
         </div>
       </div>
     </section>

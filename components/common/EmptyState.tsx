@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
-import { Inbox } from "lucide-react";
 import { ReactNode } from "react";
+import { AsciiInbox } from "./Ascii";
 
 export function EmptyState({
   icon,
@@ -24,7 +24,7 @@ export function EmptyState({
     >
       {icon !== null && (
         <div className="mb-5 text-muted-foreground">
-          {icon ?? <Inbox className="h-5 w-5" strokeWidth={1.25} />}
+          {icon ?? <AsciiInbox />}
         </div>
       )}
       <h3 className="font-display text-2xl">{title}</h3>

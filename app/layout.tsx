@@ -3,6 +3,7 @@ import { Instrument_Serif, Inter } from "next/font/google";
 import { Toaster } from "sonner";
 import { ThemeProvider } from "@/components/common/theme-provider";
 import { QueryProvider } from "@/components/common/query-provider";
+import { KonamiEasterEgg } from "@/components/common/Ascii";
 import "./globals.css";
 
 const instrumentSerif = Instrument_Serif({
@@ -49,6 +50,7 @@ export default function RootLayout({
         <ThemeProvider>
           <QueryProvider>
             {children}
+            <KonamiEasterEgg />
             <Toaster position="bottom-right" theme="light" closeButton />
           </QueryProvider>
         </ThemeProvider>
